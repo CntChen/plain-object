@@ -23,9 +23,9 @@ PlainObject.prototype = {
   constructor: PlainObject,
 
   _init: function(){
-    this._toPlain();
-    this._copyObj();
-    this._addWatch();
+    this.Plain = this._toPlain();
+    this.Copy = this._copyObj();
+    this.Model = this._addWatch();
   },
 
   /**
@@ -34,7 +34,7 @@ PlainObject.prototype = {
   _toPlain: function(){
     var tempObj = {};
     toPlain_interation(this.From, 'cnt');
-    this.Plain = tempObj;
+    return tempObj;
 
     function toPlain_interation(from, level){
       var level = level || '';
@@ -50,8 +50,6 @@ PlainObject.prototype = {
         tempObj[level] = from;
       }
     }
-
-    return true;
   },
 
   /**
@@ -59,7 +57,7 @@ PlainObject.prototype = {
    */
   _copyObj: function(){
     var tempObj = toWatchedObject_interation(this.From);
-    this.Copy = tempObj;
+    return tempObj;
 
     function toWatchedObject_interation(from){
       var temData;
@@ -79,21 +77,19 @@ PlainObject.prototype = {
 
       return temData;
     }
-
-    return true;
   },
 
   _addWatch: function(){
-    var temData;
-    if (Util.isObject(this.From)) {
-      temData = ObjectPropertySimulation(this.From);
-    } else if (Util.isArray(this.From)) {
-      temData = ArrayPropertySimulation(this.From);
+    var tempObj = {};
+
+    var copy = this._copyObj();
+    if (Util.isObject(copy)) {
+      tempObj = ObjectPropertySimulation(copy);
+    } else if (Util.isArray(copy)) {
+      tempObj = ArrayPropertySimulation(copy);
     }
 
-    this.Model = temData;
-
-    return true;
+    return tempObj;
   },
 };
 
@@ -103,7 +99,7 @@ PlainObject.prototype = {
  * data descriptor 保留原始数据
  * accessor descriptor 模拟对象的属性
  */
-function ObjectPropertySimulation(from){
+function ObjectPropertySimulation(from) {
   var temData = {};
 
   Object.defineProperty(temData, '__from', {
@@ -115,31 +111,24 @@ function ObjectPropertySimulation(from){
 
   for (var key in from) {
     if (Util.isObject(from[key])) {
-      (function(lockedKey) {
-        Object.defineProperty(temData, lockedKey, {
-          value: ObjectPropertySimulation(from[key]),
-          writable: false,
-          configurable: false,
-          enumerable: true,
-        });
-      })(key);
+      from[key] = ObjectPropertySimulation(from[key]);
     } else if (Util.isObject(from[key])) {
-      // TODO
+      from[key] = ArrayPropertySimulation(from[key]);
     } else {
-      // 需要使用立即执行函数???
-      (function(lockedKey) {
-        Object.defineProperty(temData, lockedKey, {
-          get: function() {
-            return this.__from[lockedKey];
-          },
-          set: function(value) {
-            this.__from[lockedKey] = value;
-          },
-          configurable: false,
-          enumerable: true,
-        });
-      })(key);
     }
+    // 需要使用立即执行函数???
+    (function(lockedKey) {
+      Object.defineProperty(temData, lockedKey, {
+        get: function() {
+          return this.__from[lockedKey];
+        },
+        set: function(value) {
+          this.__from[lockedKey] = value;
+        },
+        configurable: false,
+        enumerable: true,
+      });
+    })(key);
   }
 
   return temData;
@@ -159,6 +148,7 @@ function ArrayPropertySimulation(from){
 
   buildWatch();
 
+  // 监控数组操作方法
   ['copyWithin', 'fill', 'push', 'pop', 'reverse', 'shift', 'sort', 'splice', 'unshift'].forEach(function(method){
     (function(lockedMethod) {
       Object.defineProperty(temData, lockedMethod, {
@@ -180,9 +170,23 @@ function ArrayPropertySimulation(from){
 
     for (var key = 0; key < from.length; key++) {
       if (Util.isObject(from[key])) {
-
+        (function(lockedKey) {
+          Object.defineProperty(temData, lockedKey, {
+            value: ObjectPropertySimulation(from[key]),
+            writable: true,
+            configurable: true,
+            enumerable: true,
+          });
+        })(key);
       } else if (Util.isArray(from[key])) {
-
+        (function(lockedKey) {
+          Object.defineProperty(temData, lockedKey, {
+            value: ArrayPropertySimulation(from[key]),
+            writable: true,
+            configurable: true,
+            enumerable: true,
+          });
+        })(key);
       } else {
         (function(lockedKey) {
           Object.defineProperty(temData, lockedKey, {
