@@ -54,6 +54,9 @@ PlainObject.prototype = {
     return true;
   },
 
+  /**
+   * 复制对象
+   */
   _copyObj: function(){
     var tempObj = toWatchedObject_interation(this.From);
     this.Copy = tempObj;
@@ -146,27 +149,55 @@ function ObjectPropertySimulation(from){
  * Object.defineProperty 模拟数组的属性
  */
 function ArrayPropertySimulation(from){
-  var temData = [];
-
+  var temData = {};
   Object.defineProperty(temData, '__from', {
     value: from,
-    writable: false,
+    writable: true,
     configurable: false,
-    enumerable: false,
+    enumerable: true,
   });
 
-  if (Util.isObject(from)) {
-    temData = {};
-    for (var key in from) {
-      temData[key] = ArrayPropertySimulation(from[key]);
+  buildWatch();
+
+  ['copyWithin', 'fill', 'push', 'pop', 'reverse', 'shift', 'sort', 'splice', 'unshift'].forEach(function(method){
+    (function(lockedMethod) {
+      Object.defineProperty(temData, lockedMethod, {
+        value: function(){
+          [][lockedMethod].apply(this.__from, arguments);
+          buildWatch();
+        },
+        writable: false,
+        configurable: false,
+        enumerable: false,
+      });
+    })(method);
+  });
+
+  function buildWatch(){
+    for(var key in temData){
+      delete temData[key];
     }
-  } else if (Util.isArray(from)) {
-    temData = [];
+
     for (var key = 0; key < from.length; key++) {
-      temData.push(toWatchedObject_interation(from[key]));
+      if (Util.isObject(from[key])) {
+
+      } else if (Util.isArray(from[key])) {
+
+      } else {
+        (function(lockedKey) {
+          Object.defineProperty(temData, lockedKey, {
+            get: function() {
+              return this.__from[lockedKey];
+            },
+            set: function(value) {
+              this.__from[lockedKey] = value;
+            },
+            configurable: true,
+            enumerable: true,
+          });
+        })(key);
+      }
     }
-  } else {
-    temData = from;
   }
 
   return temData;
